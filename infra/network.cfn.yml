@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  Chatanoo Network
+
+Metadata:
+
+Parameters:
+  DomainName:
+    Type: String
+  ProjectName:
+    Type: String
+
+Mappings:
+
+Conditions:
+
+Resources:
+
+  PublicDNS:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        comment: !Join ['', ['[Chatanoo] Public Hosted zone for', !Ref ProjectName]]
+      Name: !Ref DomainName
+      HostedZoneTags:
+        - key: 'chatanoo:project'
+          value: !Ref ProjectName
+        - key: 'chatanoo:component'
+          value: 'network'
+
+Outputs:
+  HostedZone:
+    Description: Id of the Hosted Zone created
+    Value: !Ref PublicDNS
