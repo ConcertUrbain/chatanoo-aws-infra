@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: |
   Chatanoo Network
 
-Metadata:
+# Metadata:
 
 Parameters:
   DomainName:
@@ -10,9 +10,9 @@ Parameters:
   ProjectName:
     Type: String
 
-Mappings:
+# Mappings:
 
-Conditions:
+# Conditions:
 
 Resources:
 
@@ -20,13 +20,13 @@ Resources:
     Type: AWS::Route53::HostedZone
     Properties:
       HostedZoneConfig:
-        comment: !Join ['', ['[Chatanoo] Public Hosted zone for', !Ref ProjectName]]
+        Comment: !Join ['', ['[Chatanoo] Public Hosted zone for', !Ref ProjectName]]
       Name: !Ref DomainName
       HostedZoneTags:
-        - key: 'chatanoo:project'
-          value: !Ref ProjectName
-        - key: 'chatanoo:component'
-          value: 'network'
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'network'
 
 Outputs:
   HostedZone:

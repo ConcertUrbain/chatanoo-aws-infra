@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: |
   Chatanoo Infrastructure
 
-Metadata:
+# Metadata:
 
 Parameters:
   DomainName:
@@ -17,105 +17,109 @@ Parameters:
     Type: String
     Default: chatanoo-deployment
 
-Mappings:
+# Mappings:
 
-Conditions:
+# Conditions:
 
 Resources:
 
   Repo:
     Type: "AWS::S3::Bucket"
-    DeletionPolicy: "retain"
+    DeletionPolicy: "Retain"
     Properties:
       Tags:
-        - key: 'chatanoo:project'
-          value: !Ref ProjectName
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
 
   LambdaCustomResources:
     Type: "AWS::CloudFormation::Stack"
-    TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/resources/1.0.0.cform']]
-    Parameters:
-      DeploymentBucket: !Ref DeploymentBucket
-      CloudFrontIdentityKey: "aws-cloudformation-cloudfront-identity/1.0.1.zip"
-      CognitoIdentityPoolKey: "aws-cloudformation-cognito-identitypool/1.0.0.zip"
-      CognitoIdentityPoolRolesKey: "aws-cloudformation-cognito-identitypoolroles/1.0.0.zip"
-      CognitoUserPoolKey: "aws-cloudformation-cognito-userpool/1.0.0.zip"
-      CognitoUserPoolClientKey: "aws-cloudformation-cognito-userpoolclient/1.0.1.zip"
-      CognitoUserPoolCustomAttributesKey: "aws-cloudformation-cognito-userpoolcustomattributes/1.0.1.zip"
-      DynamoDBItemKey: "aws-cloudformation-dynamodb-item/1.0.0.zip"
-      ElasticTranscoderPipelineKey: "aws-cloudformation-elastic-transcoder-pipeline/1.0.0.zip"
-      ElasticTranscoderPresetKey: "aws-cloudformation-elastic-transcoder-preset/1.0.0.zip"
-      S3UploaderKey: "aws-cloudformation-s3-uploader/1.0.0.zip"
+    Properties:
+      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/resources/1.0.6.cform']]
+      Parameters:
+        DeploymentBucket: !Ref DeploymentBucket
+        CloudFrontIdentityKey: "aws-cloudformation-cloudfront-identity/1.0.1.zip"
+        CognitoIdentityPoolKey: "aws-cloudformation-cognito-identitypool/1.0.0.zip"
+        CognitoIdentityPoolRolesKey: "aws-cloudformation-cognito-identitypoolroles/1.0.0.zip"
+        CognitoUserPoolKey: "aws-cloudformation-cognito-userpool/1.0.0.zip"
+        CognitoUserPoolClientKey: "aws-cloudformation-cognito-userpoolclient/1.0.1.zip"
+        CognitoUserPoolCustomAttributesKey: "aws-cloudformation-cognito-userpoolcustomattributes/1.0.1.zip"
+        DynamoDBItemKey: "aws-cloudformation-dynamodb-item/1.0.0.zip"
+        ElasticTranscoderPipelineKey: "aws-cloudformation-elastic-transcoder-pipeline/1.0.0.zip"
+        ElasticTranscoderPresetKey: "aws-cloudformation-elastic-transcoder-preset/1.0.0.zip"
+        S3UploaderKey: "aws-cloudformation-s3-uploader/1.0.0.zip"
       Tags:
-        - key: 'chatanoo:project'
-          value: !Ref ProjectName
-        - key: 'chatanoo:component'
-          value: 'resources'
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'resources'
 
   Network:
     Type: "AWS::CloudFormation::Stack"
-    TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/network/1.0.0.cfn.yml']]
-    Parameters:
-      ProjectName: !Ref ProjectName
-      DomainName: !Ref DomainName
+    Properties:
+      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/network/1.0.0.cfn.yml']]
+      Parameters:
+        ProjectName: !Ref ProjectName
+        DomainName: !Ref DomainName
       Tags:
-        - key: 'chatanoo:project'
-          value: !Ref ProjectName
-        - key: 'chatanoo:component'
-          value: 'network'
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'network'
 
   MediasCenter:
     Type: "AWS::CloudFormation::Stack"
-    TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/mediascenter/1.0.1.cform']]
-    Parameters:
-      ProjectName: !Ref ProjectName
-      CreateDNSRecord: true
-      DomainName: !Ref DomainName
-      SubDomainName: medias
-      Route53HostedZone: !GetAttr Network.HostedZone
-      TranscoderSourceUrl: !Join ['', [!Ref DeploymentUrl, 'infra/mediascenter/1.0.0.cform']]
-      S3UploadRepoBucket: !Ref Repo
-      ElasticTranscoderPipelineLambda: !GetAttr LambdaCustomResources.ElasticTranscoderPipeline
-      ElasticTranscoderPresetLambda: !GetAttr LambdaCustomResources.ElasticTranscoderPreset
-      S3UploaderLambda: !GetAttr LambdaCustomResources.S3Uploader
-      CloudFrontIdentityLambda: !GetAttr LambdaCustomResources.CloudFrontIdentity
-      CloudFrontCertificateLambda: !GetAttr LambdaCustomResources.CloudFrontCertificate
-      CognitoIdentityPoolLambda: !GetAttr LambdaCustomResources.CognitoIdentityPool
-      CognitoIdentityPoolRolesLambda: !GetAttr LambdaCustomResources.CognitoIdentityPoolRoles
+    Properties:
+      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/mediascenter/1.0.2.cform']]
+      Parameters:
+        ProjectName: !Ref ProjectName
+        CreateDNSRecord: false #true
+        DomainName: !Ref DomainName
+        SubDomainName: medias
+        Route53HostedZone: !GetAtt Network.Outputs.HostedZone
+        TranscoderSourceUrl: !Join ['', [!Ref DeploymentUrl, 'mediascenter/transcoder/1.0.1.zip']]
+        S3UploadRepoBucket: !Ref Repo
+        ElasticTranscoderPipelineLambda: !GetAtt LambdaCustomResources.Outputs.ElasticTranscoderPipeline
+        ElasticTranscoderPresetLambda: !GetAtt LambdaCustomResources.Outputs.ElasticTranscoderPreset
+        S3UploaderLambda: !GetAtt LambdaCustomResources.Outputs.S3Uploader
+        CloudFrontIdentityLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontIdentity
+        # CloudFrontCertificateLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontCertificate
+        CognitoIdentityPoolLambda: !GetAtt LambdaCustomResources.Outputs.CognitoIdentityPool
+        CognitoIdentityPoolRolesLambda: !GetAtt LambdaCustomResources.Outputs.CognitoIdentityPoolRoles
       Tags:
-        - key: 'chatanoo:project'
-          value: !Ref ProjectName
-        - key: 'chatanoo:component'
-          value: 'mediascenter'
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'mediascenter'
 
   Admin:
     Type: "AWS::CloudFormation::Stack"
-    TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/admin/1.0.0.cform']]
-    Parameters:
-      ProjectName: !Ref ProjectName
-      CreateDNSRecord: true
-      DomainName: !Ref DomainName
-      SubDomainName: admin
-      Route53HostedZone: !GetAttr Network.HostedZone
-      DeploymentZipUrl: !Join ['', [!Ref DeploymentUrl, 'admin/1.0.2.zip']]
-      WSURL: "" #!GetAttr Core.Url
-      MobileInterfaceUrl: "" #!GetAttr Mobile.Url
-      MediaCenterUrl: !GetAttr MediasCenter.Url
-      MediaCenterInputBucket: !GetAttr MediasCenter.InputBucket
-      MediaCenterIdentityPool: !GetAttr MediasCenter.UploadIdentityPool
-      S3UploaderLambda: !GetAttr LambdaCustomResources.S3Uploader
-      CloudFrontIdentityLambda: !GetAttr LambdaCustomResources.CloudFrontIdentity
-      CloudFrontCertificateLambda: !GetAttr LambdaCustomResources.CloudFrontCertificate
+    Properties:
+      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/admin/1.0.2.cform']]
+      Parameters:
+        ProjectName: !Ref ProjectName
+        CreateDNSRecord: false #true
+        DomainName: !Ref DomainName
+        SubDomainName: admin
+        Route53HostedZone: !GetAtt Network.Outputs.HostedZone
+        DeploymentZipUrl: !Join ['', [!Ref DeploymentUrl, 'admin/1.0.2.zip']]
+        WSURL: !Join ['', ['https://core.', !Ref DomainName]] #!GetAtt Core.Outputs.Url
+        MobileInterfaceUrl: !Join ['', ['https://m.', !Ref DomainName]] #!GetAtt Mobile.Outputs.Url
+        MediaCenterUrl: !GetAtt MediasCenter.Outputs.CDNDistributionUrl #!GetAtt MediasCenter.Outputs.Url
+        MediaCenterInputBucket: !GetAtt MediasCenter.Outputs.InputBucket
+        MediaCenterIdentityPool: !GetAtt MediasCenter.Outputs.UploadIdentityPool
+        S3UploaderLambda: !GetAtt LambdaCustomResources.Outputs.S3Uploader
+        CloudFrontIdentityLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontIdentity
+        # CloudFrontCertificateLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontCertificate
       Tags:
-        - key: 'chatanoo:project'
-          value: !Ref ProjectName
-        - key: 'chatanoo:component'
-          value: 'admin'
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'admin'
 
 
 
 Outputs:
   MediasCenterUrl:
-    Value: !GetAttr MediasCenter.Url
+    Value: !Join ['', ['https://medias.', !Ref DomainName]] #!GetAtt MediasCenter.Outputs.Url
   AdminUrl:
-    Value: !GetAttr Admin.Url
+    Value: !Join ['', ['https://admin.', !Ref DomainName]] #!GetAtt Admin.Outputs.Url
