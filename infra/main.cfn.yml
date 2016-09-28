@@ -91,19 +91,43 @@ Resources:
         - Key: 'chatanoo:component'
           Value: 'mediascenter'
 
+  Mobile:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/mobile/1.0.1.cfn.yml']]
+      Parameters:
+        ProjectName: !Ref ProjectName
+        CreateDNSRecord: false #true
+        DomainName: !Ref DomainName
+        SubDomainName: m
+        Route53HostedZone: !GetAtt Network.Outputs.HostedZone
+        DeploymentZipUrl: !Join ['', [!Ref DeploymentUrl, 'mobile/1.0.1.zip']]
+        WSURL: !Join ['', ['https://core.', !Ref DomainName]] #!GetAtt Core.Outputs.Url
+        MediaCenterUrl: !GetAtt MediasCenter.Outputs.CDNDistributionUrl #!GetAtt MediasCenter.Outputs.Url
+        MediaCenterInputBucket: !GetAtt MediasCenter.Outputs.InputBucket
+        MediaCenterIdentityPool: !GetAtt MediasCenter.Outputs.UploadIdentityPool
+        S3UploaderLambda: !GetAtt LambdaCustomResources.Outputs.S3Uploader
+        CloudFrontIdentityLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontIdentity
+        # CloudFrontCertificateLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontCertificate
+      Tags:
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'mobile'
+
   Admin:
     Type: "AWS::CloudFormation::Stack"
     Properties:
-      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/admin/1.0.2.cform']]
+      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/admin/1.0.5.cform']]
       Parameters:
         ProjectName: !Ref ProjectName
         CreateDNSRecord: false #true
         DomainName: !Ref DomainName
         SubDomainName: admin
         Route53HostedZone: !GetAtt Network.Outputs.HostedZone
-        DeploymentZipUrl: !Join ['', [!Ref DeploymentUrl, 'admin/1.0.2.zip']]
+        DeploymentZipUrl: !Join ['', [!Ref DeploymentUrl, 'admin/1.0.5.zip']]
         WSURL: !Join ['', ['https://core.', !Ref DomainName]] #!GetAtt Core.Outputs.Url
-        MobileInterfaceUrl: !Join ['', ['https://m.', !Ref DomainName]] #!GetAtt Mobile.Outputs.Url
+        MobileInterfaceUrl: !GetAtt Mobile.Outputs.CloudFrontUrl #!GetAtt Mobile.Outputs.Url
         MediaCenterUrl: !GetAtt MediasCenter.Outputs.CDNDistributionUrl #!GetAtt MediasCenter.Outputs.Url
         MediaCenterInputBucket: !GetAtt MediasCenter.Outputs.InputBucket
         MediaCenterIdentityPool: !GetAtt MediasCenter.Outputs.UploadIdentityPool
@@ -116,10 +140,10 @@ Resources:
         - Key: 'chatanoo:component'
           Value: 'admin'
 
-
-
 Outputs:
   MediasCenterUrl:
     Value: !Join ['', ['https://medias.', !Ref DomainName]] #!GetAtt MediasCenter.Outputs.Url
   AdminUrl:
     Value: !Join ['', ['https://admin.', !Ref DomainName]] #!GetAtt Admin.Outputs.Url
+  MobileUrl:
+    Value: !Join ['', ['https://m.', !Ref DomainName]] #!GetAtt Mobile.Outputs.Url
