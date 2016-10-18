@@ -2,41 +2,195 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: |
   Chatanoo Infrastructure
 
-# Metadata:
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: General Configuration
+        Parameters: ["ProjectName", "DomainName", "MultiAZ", "UseSecureConnection", "EC2KeyName", "DeploymentBucket"]
+      - Label:
+          default: Instances Type Configuration
+        Parameters: ["MemcachedInstanceType", "RDSInstanceType", "CoreInstanceType"]
+      - Label:
+          default: Advanced Configuration
+        Parameters: ["CidrPrefix", "SSHFrom", "UseBastionHost"]
 
 Parameters:
-  DomainName:
-    Type: String
   ProjectName:
     Type: String
-
-  DeploymentUrl:
+  EC2KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  MultiAZ:
     Type: String
-    Default: https://s3-eu-west-1.amazonaws.com/chatanoo-deployment/
+    AllowedValues: ["true", "false"]
+    Default: false
+  UseSecureConnection:
+    Description: Use HTTPS to connect this website
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+  DomainName:
+    Type: String
+
+  MemcachedInstanceType:
+    Type: String
+    Default: cache.t2.micro
+    AllowedValues:
+      - cache.t2.micro
+      - cache.t2.small
+      - cache.t2.medium
+      - cache.m3.medium
+      - cache.m3.large
+      - cache.m3.xlarge
+      - cache.m3.2xlarge
+      - cache.m4.large
+      - cache.m4.xlarge
+      - cache.m4.2xlarge
+      - cache.m4.4xlarge
+      - cache.m4.10xlarge
+      - cache.r3.large
+      - cache.r3.xlarge
+      - cache.r3.2xlarge
+      - cache.r3.4xlarge
+      - cache.r3.8xlarge
+  RDSInstanceType:
+    Type: String
+    Default: db.t2.micro
+    AllowedValues:
+      - db.t2.micro
+      - db.t2.small
+      - db.t2.medium
+      - db.t2.large
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.m3.medium
+      - db.m3.large
+      - db.m3.xlarge
+      - db.m3.2xlarge
+      - db.r3.large
+      - db.r3.xlarge
+      - db.r3.2xlarge
+      - db.r3.4xlarge
+      - db.r3.8xlarge
+      - db.m2.xlarge
+      - db.m2.2xlarge
+      - db.m2.4xlarge
+      - db.m1.small
+      - db.m1.medium
+      - db.m1.large
+      - db.m1.xlarge
+      - db.t1.micro
+  CoreInstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - m4.16xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c3.4xlarge
+      - c3.8xlarge
+      - g2.2xlarge
+      - g2.8xlarge
+      - p2.xlarge
+      - p2.8xlarge
+      - p2.16xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - x1.16xlarge
+      - x1.32xlarge
+      - d2.xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+      - i2.xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+
   DeploymentBucket:
     Type: String
     Default: chatanoo-deployment
+  CidrPrefix:
+    Type: String
+    Default: '10.0'
+  SSHFrom:
+    Type: String
+    Description: Lockdown SSH access to the bastion host (default can be accessed from anywhere)
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid CIDR range of the form x.x.x.x/x
+  UseBastionHost:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
 
 # Mappings:
 
-# Conditions:
+Conditions:
+  UseDNSRecord: !Not [!Equals [!Ref DomainName, ""]]
+  UseMultiAZ: !Equals [!Ref MultiAZ, "true"]
+  UseHTTPS: !Equals [!Ref UseSecureConnection, "true"]
 
 Resources:
 
-  Repo:
-    Type: "AWS::S3::Bucket"
-    DeletionPolicy: "Retain"
+  Network:
+    Type: AWS::CloudFormation::Stack
     Properties:
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/network/1.1.0.cfn.yml']]
+      Parameters:
+        MultiAZ: !Ref MultiAZ
+        ProjectName: !Ref ProjectName
+        DomainName: !If [UseDNSRecord, !Ref DomainName, ""]
+        CidrPrefix: !Ref CidrPrefix
+        SSHFrom: !Ref SSHFrom
+        UseBastionHost: !Ref UseBastionHost
+        EC2KeyName: !Ref EC2KeyName
       Tags:
         - Key: 'chatanoo:project'
           Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'network'
 
-  LambdaCustomResources:
-    Type: "AWS::CloudFormation::Stack"
+  CustomResources:
+    Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/resources/1.0.6.cform']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/resources/1.1.0.cfn.yml']]
       Parameters:
+        MultiAZ: !Ref MultiAZ
+        ProjectName: !Ref ProjectName
+        VPCId: !GetAtt Network.Outputs.VPCId
+        CidrPrefix: !Sub "${CidrPrefix}.2"
         DeploymentBucket: !Ref DeploymentBucket
+        PrivateRouteTable: !GetAtt Network.Outputs.PrivateRouteTable
         CloudFrontIdentityKey: "aws-cloudformation-cloudfront-identity/1.0.1.zip"
         CognitoIdentityPoolKey: "aws-cloudformation-cognito-identitypool/1.0.0.zip"
         CognitoIdentityPoolRolesKey: "aws-cloudformation-cognito-identitypoolroles/1.0.0.zip"
@@ -47,44 +201,72 @@ Resources:
         ElasticTranscoderPipelineKey: "aws-cloudformation-elastic-transcoder-pipeline/1.0.0.zip"
         ElasticTranscoderPresetKey: "aws-cloudformation-elastic-transcoder-preset/1.0.0.zip"
         S3UploaderKey: "aws-cloudformation-s3-uploader/1.0.0.zip"
+        PasswordGeneratorKey: "aws-cloudformation-password-generator/1.0.0.zip"
+        SQLRequestKey: "aws-cloudformation-sql-request/1.0.0.zip"
+        Route53HostedZoneDetailsKey: "aws-cloudformation-route53-hostedzone-details/1.0.0.zip"
       Tags:
         - Key: 'chatanoo:project'
           Value: !Ref ProjectName
         - Key: 'chatanoo:component'
           Value: 'resources'
 
-  Network:
-    Type: "AWS::CloudFormation::Stack"
+  Core:
+    Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/network/1.0.0.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/core/1.1.0.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
-        DomainName: !Ref DomainName
+        MultiAZ: !Ref MultiAZ
+        UseSecureConnection: !If [UseHTTPS, 'true', 'false']
+        CidrPrefix: !Sub "${CidrPrefix}.3"
+        PublicRouteTable: !GetAtt Network.Outputs.PublicRouteTable
+        PrivateRouteTable: !GetAtt Network.Outputs.PrivateRouteTable
+        InstanceSecurityGroup: !GetAtt Network.Outputs.InstanceSecurityGroup
+        ResourceSecurityGroup: !GetAtt CustomResources.Outputs.ResourceSecurityGroup
+        SubDomainName: core
+        DeploymentBucket: !Ref DeploymentBucket
+        CoreApplicationKey: "core/application/1.1.0.zip"
+        CoreDBSchemaKey: "core/database/1.1.0.sql"
+        ChatanooApiKeyKey: "core/chatanoo-apikey/1.1.0.zip"
+        VPCId: !GetAtt Network.Outputs.VPCId
+        EC2KeyName: !Ref EC2KeyName
+        MemcachedInstanceType: !Ref MemcachedInstanceType
+        RDSInstanceType: !Ref RDSInstanceType
+        CoreInstanceType: !Ref CoreInstanceType
+        Route53HostedZone: !If [UseDNSRecord, !GetAtt Network.Outputs.HostedZone, ""]
+        S3UploaderLambda: !GetAtt CustomResources.Outputs.S3Uploader
+        PasswordGeneratorLambda: !GetAtt CustomResources.Outputs.PasswordGenerator
+        SQLRequestLambda: !GetAtt CustomResources.Outputs.SQLRequest
+        Route53HostedZoneDetailsLambda: !GetAtt CustomResources.Outputs.Route53HostedZoneDetails
       Tags:
         - Key: 'chatanoo:project'
           Value: !Ref ProjectName
         - Key: 'chatanoo:component'
-          Value: 'network'
+          Value: 'core'
 
   MediasCenter:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/mediascenter/1.0.2.cform']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/mediascenter/1.1.0.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
-        CreateDNSRecord: false #true
-        DomainName: !Ref DomainName
+        MultiAZ: !Ref MultiAZ
+        UseSecureConnection: !If [UseHTTPS, 'true', 'false']
         SubDomainName: medias
-        Route53HostedZone: !GetAtt Network.Outputs.HostedZone
-        TranscoderSourceUrl: !Join ['', [!Ref DeploymentUrl, 'mediascenter/transcoder/1.0.1.zip']]
-        S3UploadRepoBucket: !Ref Repo
-        ElasticTranscoderPipelineLambda: !GetAtt LambdaCustomResources.Outputs.ElasticTranscoderPipeline
-        ElasticTranscoderPresetLambda: !GetAtt LambdaCustomResources.Outputs.ElasticTranscoderPreset
-        S3UploaderLambda: !GetAtt LambdaCustomResources.Outputs.S3Uploader
-        CloudFrontIdentityLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontIdentity
-        # CloudFrontCertificateLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontCertificate
-        CognitoIdentityPoolLambda: !GetAtt LambdaCustomResources.Outputs.CognitoIdentityPool
-        CognitoIdentityPoolRolesLambda: !GetAtt LambdaCustomResources.Outputs.CognitoIdentityPoolRoles
+        Route53HostedZone: !If [UseDNSRecord, !GetAtt Network.Outputs.HostedZone, ""]
+        CidrPrefix: !Sub "${CidrPrefix}.4"
+        VPCId: !GetAtt Network.Outputs.VPCId
+        PrivateRouteTable: !GetAtt Network.Outputs.PrivateRouteTable
+        DeploymentBucket: !Ref DeploymentBucket
+        TranscoderSourceKey: 'mediascenter/transcoder/1.1.0.zip'
+        ElasticTranscoderPipelineLambda: !GetAtt CustomResources.Outputs.ElasticTranscoderPipeline
+        ElasticTranscoderPresetLambda: !GetAtt CustomResources.Outputs.ElasticTranscoderPreset
+        S3UploaderLambda: !GetAtt CustomResources.Outputs.S3Uploader
+        CloudFrontIdentityLambda: !GetAtt CustomResources.Outputs.CloudFrontIdentity
+        # CloudFrontCertificateLambda: !GetAtt CustomResources.Outputs.CloudFrontCertificate
+        CognitoIdentityPoolLambda: !GetAtt CustomResources.Outputs.CognitoIdentityPool
+        CognitoIdentityPoolRolesLambda: !GetAtt CustomResources.Outputs.CognitoIdentityPoolRoles
+        Route53HostedZoneDetailsLambda: !GetAtt CustomResources.Outputs.Route53HostedZoneDetails
       Tags:
         - Key: 'chatanoo:project'
           Value: !Ref ProjectName
@@ -92,23 +274,25 @@ Resources:
           Value: 'mediascenter'
 
   Mobile:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/mobile/1.0.1.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/mobile/1.1.0.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
-        CreateDNSRecord: false #true
-        DomainName: !Ref DomainName
+        UseSecureConnection: !If [UseHTTPS, 'true', 'false']
         SubDomainName: m
-        Route53HostedZone: !GetAtt Network.Outputs.HostedZone
-        DeploymentZipUrl: !Join ['', [!Ref DeploymentUrl, 'mobile/1.0.1.zip']]
-        WSURL: !Join ['', ['https://core.', !Ref DomainName]] #!GetAtt Core.Outputs.Url
-        MediaCenterUrl: !GetAtt MediasCenter.Outputs.CDNDistributionUrl #!GetAtt MediasCenter.Outputs.Url
+        Route53HostedZone: !If [UseDNSRecord, !GetAtt Network.Outputs.HostedZone, ""]
+        DeploymentBucket: !Ref DeploymentBucket
+        DeploymentZipKey: 'mobile/1.1.0.zip'
+        WSURL: !GetAtt Core.Outputs.Url
+        ApiKeysUrl: !GetAtt Core.Outputs.ChatanooApiKeyList
+        MediaCenterUrl: !GetAtt MediasCenter.Outputs.Url
         MediaCenterInputBucket: !GetAtt MediasCenter.Outputs.InputBucket
         MediaCenterIdentityPool: !GetAtt MediasCenter.Outputs.UploadIdentityPool
-        S3UploaderLambda: !GetAtt LambdaCustomResources.Outputs.S3Uploader
-        CloudFrontIdentityLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontIdentity
-        # CloudFrontCertificateLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontCertificate
+        S3UploaderLambda: !GetAtt CustomResources.Outputs.S3Uploader
+        CloudFrontIdentityLambda: !GetAtt CustomResources.Outputs.CloudFrontIdentity
+        # CloudFrontCertificateLambda: !GetAtt CustomResources.Outputs.CloudFrontCertificate
+        Route53HostedZoneDetailsLambda: !GetAtt CustomResources.Outputs.Route53HostedZoneDetails
       Tags:
         - Key: 'chatanoo:project'
           Value: !Ref ProjectName
@@ -116,34 +300,139 @@ Resources:
           Value: 'mobile'
 
   Admin:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', [!Ref DeploymentUrl, 'infra/admin/1.0.5.cform']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/admin/1.1.0.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
-        CreateDNSRecord: false #true
-        DomainName: !Ref DomainName
+        UseSecureConnection: !If [UseHTTPS, 'true', 'false']
         SubDomainName: admin
-        Route53HostedZone: !GetAtt Network.Outputs.HostedZone
-        DeploymentZipUrl: !Join ['', [!Ref DeploymentUrl, 'admin/1.0.5.zip']]
-        WSURL: !Join ['', ['https://core.', !Ref DomainName]] #!GetAtt Core.Outputs.Url
-        MobileInterfaceUrl: !GetAtt Mobile.Outputs.CloudFrontUrl #!GetAtt Mobile.Outputs.Url
-        MediaCenterUrl: !GetAtt MediasCenter.Outputs.CDNDistributionUrl #!GetAtt MediasCenter.Outputs.Url
+        Route53HostedZone: !If [UseDNSRecord, !GetAtt Network.Outputs.HostedZone, ""]
+        DeploymentBucket: !Ref DeploymentBucket
+        DeploymentZipKey: 'admin/1.0.5.zip'
+        WSURL: !GetAtt Core.Outputs.Url
+        ApiKeysUrl: !GetAtt Core.Outputs.ChatanooApiKeyList
+        MobileInterfaceUrl: !GetAtt Mobile.Outputs.Url
+        MediaCenterUrl: !GetAtt MediasCenter.Outputs.Url
         MediaCenterInputBucket: !GetAtt MediasCenter.Outputs.InputBucket
         MediaCenterIdentityPool: !GetAtt MediasCenter.Outputs.UploadIdentityPool
-        S3UploaderLambda: !GetAtt LambdaCustomResources.Outputs.S3Uploader
-        CloudFrontIdentityLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontIdentity
-        # CloudFrontCertificateLambda: !GetAtt LambdaCustomResources.Outputs.CloudFrontCertificate
+        S3UploaderLambda: !GetAtt CustomResources.Outputs.S3Uploader
+        CloudFrontIdentityLambda: !GetAtt CustomResources.Outputs.CloudFrontIdentity
+        # CloudFrontCertificateLambda: !GetAtt CustomResources.Outputs.CloudFrontCertificate
+        Route53HostedZoneDetailsLambda: !GetAtt CustomResources.Outputs.Route53HostedZoneDetails
       Tags:
         - Key: 'chatanoo:project'
           Value: !Ref ProjectName
         - Key: 'chatanoo:component'
           Value: 'admin'
 
+  DomainDetails:
+    Type: Custom::Route53DomainDetails
+    Version: '1.0'
+    Condition: UseDNSRecord
+    Properties:
+      ServiceToken: !Join [':', ['arn:aws:lambda', !Ref 'AWS::Region', !Ref 'AWS::AccountId', function, !GetAtt CustomResources.Outputs.Route53HostedZoneDetails]]
+      Id: !GetAtt Network.Outputs.HostedZone
+
 Outputs:
+  BastionDNS:
+    Value: !GetAtt Network.Outputs.BastionDNS
+  DelegationNameServers:
+    Condition: UseDNSRecord
+    Value: !GetAtt DomainDetails.DelegationSet.NameServers
+
+  ResourceSecurityGroup:
+    Value: !GetAtt CustomResources.Outputs.ResourceSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ResourceSecurityGroup"
+  CloudFrontIdentity:
+    Value: !GetAtt CustomResources.Outputs.CloudFrontIdentity
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudFrontIdentity"
+  CognitoIdentityPool:
+    Value: !GetAtt CustomResources.Outputs.CognitoIdentityPool
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoIdentityPool"
+  CognitoIdentityPoolRoles:
+    Value: !GetAtt CustomResources.Outputs.CognitoIdentityPoolRoles
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoIdentityPoolRoles"
+  CognitoUserPool:
+    Value: !GetAtt CustomResources.Outputs.CognitoUserPool
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoUserPool"
+  CognitoUserPoolClient:
+    Value: !GetAtt CustomResources.Outputs.CognitoUserPoolClient
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoUserPoolClient"
+  CognitoUserPoolCustomAttributes:
+    Value: !GetAtt CustomResources.Outputs.CognitoUserPoolCustomAttributes
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoUserPoolCustomAttributes"
+  DynamoDBItem:
+    Value: !GetAtt CustomResources.Outputs.DynamoDBItem
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBItem"
+  ElasticTranscoderPipeline:
+    Value: !GetAtt CustomResources.Outputs.ElasticTranscoderPipeline
+    Export:
+      Name: !Sub "${AWS::StackName}-ElasticTranscoderPipeline"
+  ElasticTranscoderPreset:
+    Value: !GetAtt CustomResources.Outputs.ElasticTranscoderPreset
+    Export:
+      Name: !Sub "${AWS::StackName}-ElasticTranscoderPreset"
+  S3Uploader:
+    Value: !GetAtt CustomResources.Outputs.S3Uploader
+    Export:
+      Name: !Sub "${AWS::StackName}-S3Uploader"
+  PasswordGenerator:
+    Value: !GetAtt CustomResources.Outputs.PasswordGenerator
+    Export:
+      Name: !Sub "${AWS::StackName}-PasswordGenerator"
+  SQLRequest:
+    Value: !GetAtt CustomResources.Outputs.SQLRequest
+    Export:
+      Name: !Sub "${AWS::StackName}-SQLRequest"
+  Route53HostedZoneDetails:
+    Value: !GetAtt CustomResources.Outputs.Route53HostedZoneDetails
+    Export:
+      Name: !Sub "${AWS::StackName}-Route53HostedZoneDetails"
+
+  CoreUrl:
+    Value: !GetAtt Core.Outputs.Url
+    Export:
+      Name: !Sub "${AWS::StackName}-CoreUrl"
+  ChatanooCreateApiKeyLambda:
+    Value: !GetAtt Core.Outputs.ChatanooApiKey
+    Export:
+      Name: !Sub "${AWS::StackName}-ChatanooCreateApiKeyLambda"
+  ChatanooApiKeyEnvironmentBucket:
+    Value: !GetAtt Core.Outputs.ChatanooApiKeyBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ChatanooApiKeyEnvironmentBucket"
+  ChatanooApiKeyEnvironmentKey:
+    Value: !GetAtt Core.Outputs.ChatanooApiKeyEnvironmentKey
+    Export:
+      Name: !Sub "${AWS::StackName}-ChatanooApiKeyEnvironmentKey"
+
   MediasCenterUrl:
-    Value: !Join ['', ['https://medias.', !Ref DomainName]] #!GetAtt MediasCenter.Outputs.Url
+    Value: !GetAtt MediasCenter.Outputs.Url
+    Export:
+      Name: !Sub "${AWS::StackName}-MediasCenterUrl"
+  MediasCenterInputBucket:
+    Value: !GetAtt MediasCenter.Outputs.InputBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-MediasCenterInputBucket"
+  MediasCenterOutputBucket:
+    Value: !GetAtt MediasCenter.Outputs.OutputBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-MediasCenterOutputBucket"
+  MediasCenterIdentityPool:
+    Value: !GetAtt MediasCenter.Outputs.UploadIdentityPool
+    Export:
+      Name: !Sub "${AWS::StackName}-MediasCenterIdentityPool"
+
   AdminUrl:
-    Value: !Join ['', ['https://admin.', !Ref DomainName]] #!GetAtt Admin.Outputs.Url
+    Value: !GetAtt Admin.Outputs.Url
   MobileUrl:
-    Value: !Join ['', ['https://m.', !Ref DomainName]] #!GetAtt Mobile.Outputs.Url
+    Value: !GetAtt Mobile.Outputs.Url
