@@ -12,8 +12,14 @@ Metadata:
           default: Instances Type Configuration
         Parameters: ["MemcachedInstanceType", "RDSInstanceType", "CoreInstanceType"]
       - Label:
+          default: Copy from an existing project ?
+        Parameters: ["DBSnapshot", "DBSnapshotUser", "DBSnapshotPassword", "ChatanooApiKeyBucketSource", "CopyMediasFromBucket"]
+      - Label:
           default: Advanced Configuration
         Parameters: ["CidrPrefix", "SSHFrom", "UseBastionHost"]
+      - Label:
+          default: Components Version
+        Parameters: ["NetworkVersion", "CustomResourcesVersion", "CoreVersion", "MediasCenterVersion", "MobileVersion", "AdminVersion"]
 
 Parameters:
   ProjectName:
@@ -133,6 +139,18 @@ Parameters:
       - i2.4xlarge
       - i2.8xlarge
 
+  DBSnapshot:
+    Type: String
+    Description: RDS Snapshot identifier or arn if it come from an another account
+  DBSnapshotUser:
+    Type: String
+  DBSnapshotPassword:
+    Type: String
+  ChatanooApiKeyBucketSource:
+    Type: String
+  CopyMediasFromBucket:
+    Type: String
+
   DeploymentBucket:
     Type: String
     Default: chatanoo-deployment
@@ -153,6 +171,25 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
 
+  NetworkVersion:
+    Type: String
+    Default: 1.2.0
+  CustomResourcesVersion:
+    Type: String
+    Default: 1.1.0
+  MediasCenterVersion:
+    Type: String
+    Default: 1.2.0
+  CoreVersion:
+    Type: String
+    Default: 1.2.0
+  MobileVersion:
+    Type: String
+    Default: 1.1.0
+  AdminVersion:
+    Type: String
+    Default: 1.1.1
+
 # Mappings:
 
 Conditions:
@@ -165,7 +202,7 @@ Resources:
   Network:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/network/1.1.0.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/network/', !Ref NetworkVersion, '.cfn.yml']]
       Parameters:
         MultiAZ: !Ref MultiAZ
         ProjectName: !Ref ProjectName
@@ -183,7 +220,7 @@ Resources:
   CustomResources:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/resources/1.1.0.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/resources/', !Ref CustomResourcesVersion, '.cfn.yml']]
       Parameters:
         MultiAZ: !Ref MultiAZ
         ProjectName: !Ref ProjectName
@@ -200,7 +237,7 @@ Resources:
         DynamoDBItemKey: "aws-cloudformation-dynamodb-item/1.0.0.zip"
         ElasticTranscoderPipelineKey: "aws-cloudformation-elastic-transcoder-pipeline/1.0.0.zip"
         ElasticTranscoderPresetKey: "aws-cloudformation-elastic-transcoder-preset/1.0.0.zip"
-        S3UploaderKey: "aws-cloudformation-s3-uploader/1.0.0.zip"
+        S3UploaderKey: "aws-cloudformation-s3-uploader/1.1.0.zip"
         PasswordGeneratorKey: "aws-cloudformation-password-generator/1.0.0.zip"
         SQLRequestKey: "aws-cloudformation-sql-request/1.0.0.zip"
         Route53HostedZoneDetailsKey: "aws-cloudformation-route53-hostedzone-details/1.0.0.zip"
@@ -213,11 +250,15 @@ Resources:
   Core:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/core/1.1.0.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/core/', !Ref CoreVersion, '.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
         MultiAZ: !Ref MultiAZ
         UseSecureConnection: !If [UseHTTPS, 'true', 'false']
+        DBSnapshot: !Ref DBSnapshot
+        DBSnapshotUser: !Ref DBSnapshotUser
+        DBSnapshotPassword: !Ref DBSnapshotPassword
+        ChatanooApiKeyBucketSource: !Ref ChatanooApiKeyBucketSource
         CidrPrefix: !Sub "${CidrPrefix}.3"
         PublicRouteTable: !GetAtt Network.Outputs.PublicRouteTable
         PrivateRouteTable: !GetAtt Network.Outputs.PrivateRouteTable
@@ -225,9 +266,9 @@ Resources:
         ResourceSecurityGroup: !GetAtt CustomResources.Outputs.ResourceSecurityGroup
         SubDomainName: core
         DeploymentBucket: !Ref DeploymentBucket
-        CoreApplicationKey: "core/application/1.1.0.zip"
-        CoreDBSchemaKey: "core/database/1.1.0.sql"
-        ChatanooApiKeyKey: "core/chatanoo-apikey/1.1.0.zip"
+        CoreApplicationKey: !Sub "core/application/${CoreVersion}.zip"
+        CoreDBSchemaKey: !Sub "core/database/${CoreVersion}.sql"
+        ChatanooApiKeyKey: !Sub "core/chatanoo-apikey/${CoreVersion}.zip"
         VPCId: !GetAtt Network.Outputs.VPCId
         EC2KeyName: !Ref EC2KeyName
         MemcachedInstanceType: !Ref MemcachedInstanceType
@@ -247,18 +288,19 @@ Resources:
   MediasCenter:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/mediascenter/1.1.0.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/mediascenter/', !Ref MediasCenterVersion, '.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
         MultiAZ: !Ref MultiAZ
         UseSecureConnection: !If [UseHTTPS, 'true', 'false']
         SubDomainName: medias
+        # CopyMediasFromBucket: !Ref CopyMediasFromBucket
         Route53HostedZone: !If [UseDNSRecord, !GetAtt Network.Outputs.HostedZone, ""]
         CidrPrefix: !Sub "${CidrPrefix}.4"
         VPCId: !GetAtt Network.Outputs.VPCId
         PrivateRouteTable: !GetAtt Network.Outputs.PrivateRouteTable
         DeploymentBucket: !Ref DeploymentBucket
-        TranscoderSourceKey: 'mediascenter/transcoder/1.1.0.zip'
+        TranscoderSourceKey: !Sub "mediascenter/transcoder/${MediasCenterVersion}.zip"
         ElasticTranscoderPipelineLambda: !GetAtt CustomResources.Outputs.ElasticTranscoderPipeline
         ElasticTranscoderPresetLambda: !GetAtt CustomResources.Outputs.ElasticTranscoderPreset
         S3UploaderLambda: !GetAtt CustomResources.Outputs.S3Uploader
@@ -276,14 +318,14 @@ Resources:
   Mobile:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/mobile/1.1.0.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/mobile/', !Ref MobileVersion, '.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
         UseSecureConnection: !If [UseHTTPS, 'true', 'false']
         SubDomainName: m
         Route53HostedZone: !If [UseDNSRecord, !GetAtt Network.Outputs.HostedZone, ""]
         DeploymentBucket: !Ref DeploymentBucket
-        DeploymentZipKey: 'mobile/1.1.0.zip'
+        DeploymentZipKey: !Sub "mobile/${MobileVersion}.zip"
         WSURL: !GetAtt Core.Outputs.Url
         ApiKeysUrl: !GetAtt Core.Outputs.ChatanooApiKeyList
         MediaCenterUrl: !GetAtt MediasCenter.Outputs.Url
@@ -302,14 +344,14 @@ Resources:
   Admin:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/admin/1.1.0.cfn.yml']]
+      TemplateURL: !Join ['', ['https://', !Ref DeploymentBucket, '.s3.amazonaws.com', '/infra/admin/', !Ref AdminVersion, '.cfn.yml']]
       Parameters:
         ProjectName: !Ref ProjectName
         UseSecureConnection: !If [UseHTTPS, 'true', 'false']
         SubDomainName: admin
         Route53HostedZone: !If [UseDNSRecord, !GetAtt Network.Outputs.HostedZone, ""]
         DeploymentBucket: !Ref DeploymentBucket
-        DeploymentZipKey: 'admin/1.0.5.zip'
+        DeploymentZipKey: !Sub "admin/${AdminVersion}.zip"
         WSURL: !GetAtt Core.Outputs.Url
         ApiKeysUrl: !GetAtt Core.Outputs.ChatanooApiKeyList
         MobileInterfaceUrl: !GetAtt Mobile.Outputs.Url
