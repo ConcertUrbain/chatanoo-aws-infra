@@ -10,7 +10,7 @@ Metadata:
         Parameters: ["ProjectName", "DomainName", "MultiAZ", "UseSecureConnection", "EC2KeyName", "DeploymentBucket"]
       - Label:
           default: Instances Type Configuration
-        Parameters: ["MemcachedInstanceType", "RDSInstanceType", "CoreInstanceType"]
+        Parameters: ["NATInstanceType", "MemcachedInstanceType", "RDSInstanceType", "CoreInstanceType"]
       - Label:
           default: Copy from an existing project ?
         Parameters: ["DBSnapshot", "DBSnapshotUser", "DBSnapshotPassword", "ChatanooApiKeyBucketSource", "CopyMediasFromBucket"]
@@ -38,6 +38,19 @@ Parameters:
   DomainName:
     Type: String
 
+  NATInstanceType:
+    Type: String
+    Default: t2.nano
+    AllowedValues:
+      - gateway
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
   MemcachedInstanceType:
     Type: String
     Default: cache.t2.micro
@@ -173,7 +186,7 @@ Parameters:
 
   NetworkVersion:
     Type: String
-    Default: 1.2.0
+    Default: 1.3.0
   CustomResourcesVersion:
     Type: String
     Default: 1.1.0
@@ -211,6 +224,7 @@ Resources:
         SSHFrom: !Ref SSHFrom
         UseBastionHost: !Ref UseBastionHost
         EC2KeyName: !Ref EC2KeyName
+        NATInstanceType: !Ref NATInstanceType
       Tags:
         - Key: 'chatanoo:project'
           Value: !Ref ProjectName

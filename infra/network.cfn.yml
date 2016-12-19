@@ -2,8 +2,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: |
   Chatanoo Network
 
-# Metadata:
-
 Parameters:
   DomainName:
     Type: String
@@ -15,6 +13,19 @@ Parameters:
     Default: false
   EC2KeyName:
     Type: AWS::EC2::KeyPair::KeyName
+  NATInstanceType:
+    Type: String
+    Default: t2.nano
+    AllowedValues:
+      - gateway
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
 
   SSHFrom:
     Type: String
@@ -33,6 +44,7 @@ Parameters:
     Default: '10.0'
 
 Mappings:
+
   BastionAMI:
     us-east-1:
       "64": 'ami-c481fad3'
@@ -43,6 +55,16 @@ Mappings:
     ap-northeast-1:
       "64": 'ami-1a15c77b'
 
+  AWSRegion2NATAMI:
+    us-east-1:
+      "64": 'ami-184dc970'
+    us-west-2:
+      "64": 'ami-030f4133'
+    eu-west-1:
+      "64": 'ami-14913f63'
+    ap-southeast-1:
+      "64": 'ami-03cf3903'
+
 Conditions:
   UseBastionHostCondition: !Equals [!Ref UseBastionHost, "true"]
   UseMultiAZ: !Equals [!Ref MultiAZ, "true"]
@@ -50,6 +72,8 @@ Conditions:
   UseDNSAndBastion: !And
     - !Condition UseDNSRecord
     - !Condition UseBastionHostCondition
+  UseNATGateway: !Equals [!Ref NATInstanceType, "gateway"]
+  DontUseNATGateway: !Not [!Equals [!Ref NATInstanceType, "gateway"]]
 
 Resources:
 
@@ -278,17 +302,82 @@ Resources:
   ###################
   # Private Network #
   ###################
-  NATIP:
+  NATIP2:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+      InstanceId: !If
+        - DontUseNATGateway
+        - !Ref NATInstance
+        - !Ref "AWS::NoValue"
 
   NAT:
     DependsOn: GatewayToInternet
     Type: AWS::EC2::NatGateway
+    Condition: UseNATGateway
     Properties:
-      AllocationId: !GetAtt NATIP.AllocationId
+      AllocationId: !GetAtt NATIP2.AllocationId
       SubnetId: !Ref PublicSubnet1
+
+  NATInstance:
+    DependsOn: GatewayToInternet
+    Type: AWS::EC2::Instance
+    Condition: DontUseNATGateway
+    Properties:
+      ImageId: !FindInMap ["AWSRegion2NATAMI", !Ref "AWS::Region", "64"]
+      InstanceType: !Ref NATInstanceType
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref NATSecurityGroup
+          AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          DeleteOnTermination: "true"
+          SubnetId: !Ref PublicSubnet1
+      KeyName: !Ref EC2KeyName
+      SourceDestCheck: "false"
+      Tags:
+        - Key: Name
+          Value: !Sub "NAT (${ProjectName})"
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'network'
+
+  NATSecurityGroup:
+    DependsOn: VPC
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "NAT Security Group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Sub "${CidrPrefix}.0.0/16"
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Sub "${CidrPrefix}.0.0/16"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "NAT SecurityGroup (${ProjectName})"
+        - Key: 'chatanoo:project'
+          Value: !Ref ProjectName
+        - Key: 'chatanoo:component'
+          Value: 'network'
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -308,7 +397,14 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NAT
+      NatGatewayId: !If
+        - UseNATGateway
+        - !Ref NAT
+        - !Ref "AWS::NoValue"
+      InstanceId: !If
+        - DontUseNATGateway
+        - !Ref NATInstance
+        - !Ref "AWS::NoValue"
 
   PrivateNetworkAcl:
     Type: AWS::EC2::NetworkAcl
